@@ -1,0 +1,17 @@
+python==3.11
+telethon
+aiocron
+ffmpeg
+emoji
+time
+asyncio
+datetime
+gpytranslate
+pytz
+gtts
+qrcode
+Telegram
+aiohttp
+fake_useragent
+user_agent
+hijri_converter
