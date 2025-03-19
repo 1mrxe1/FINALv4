@@ -109,92 +109,56 @@ else:
 
             print(f"Session for {phone_number} started.")
             break
-
 phone_number_pending = None
 phone_code_hash_pending = None
-new_client = None
-installation_active = False
-awaiting_password = False  # حالة انتظار كلمة المرور
+new_client = None 
+@client.on(events.NewMessage(outgoing=True, pattern=r"\.جلسة (.+)$"))
+async def add_session(event):
+    global phone_number_pending, phone_code_hash_pending, new_client
+    phone_number = event.pattern_match.group(1)
+    phone_number_pending = phone_number
+    
+    new_client = TelegramClient(StringSession(), api_id, api_hash)
+    await new_client.connect()
 
-@client.on(events.NewMessage(outgoing=True, pattern=r"\.تفعيل التنصيب$"))
-async def enable_installation(event):
-    global installation_active, phone_number_pending, phone_code_hash_pending, new_client, awaiting_password
-    if installation_active:
-        await event.respond("⚠️| عملية التنصيب قيد التفعيل بالفعل.")
+    if not await new_client.is_user_authorized():
+        sent_code = await new_client.send_code_request(phone_number)
+        phone_code_hash_pending = sent_code.phone_code_hash
+        await event.respond('▪︎|تم إرسال الكود. الرجاء إرسال الكود باستخدام الأمر `.رمز <الكود>` (مع مسافة بين الأرقام)', parse_mode="markdown")
+
+@client.on(events.NewMessage(outgoing=True, pattern=r"\.رمز (.+)$"))
+async def add_code(event):
+    global phone_number_pending, phone_code_hash_pending, new_client 
+    if phone_number_pending is None:
+        await event.respond('▪︎|الرجاء إرسال رقم الهاتف أولاً باستخدام الأمر `.جلسة <رقم الهاتف>`', parse_mode="markdown")
         return
 
-    installation_active = True
-    phone_number_pending = None
-    phone_code_hash_pending = None
-    new_client = None
-    awaiting_password = False
+    code = event.pattern_match.group(1).replace(" ", "") 
+    try:
+        await new_client.sign_in(phone_number_pending, code, phone_code_hash=phone_code_hash_pending)
+        save_session(new_client, phone_number_pending)
+        await event.respond(f'▪︎|تمت إضافة الجلسة لرقم الهاتف {phone_number_pending} بنجاح✅️', parse_mode="markdown")
+        phone_number_pending = None
+        phone_code_hash_pending = None
+        new_client = None 
+    except SessionPasswordNeededError:
+        await event.respond('▪︎|يتطلب هذا الحساب تحقق بخطوتين. الرجاء إرسال كلمة المرور باستخدام الأمر `.تحقق <كلمة المرور>`', parse_mode="markdown")
+    except Exception as e:
+        await event.respond(f'حدث خطأ أثناء إضافة الجلسة: {str(e)}')
 
-    await event.respond("✅| تم تفعيل روبوت التنصيب في هذه المحادثة.\n\n🤖| مرحبًا، أنا روبوت التنصيب. سأرشدك خلال الخطوات، فقط نفذ ما أطلبه منك.")
-    await asyncio.sleep(2)
-    await event.respond("📱| أولًا، قم بنسخ رقم هاتفك من تيليجرام وأرسله هنا، مع التأكد أنه يبدأ بـ `+`.")
-
-@client.on(events.NewMessage(outgoing=True, pattern=r"\.تعطيل التنصيب$"))
-async def disable_installation(event):
-    reset_installation()
-    await event.respond("❌| تم تعطيل روبوت التنصيب في هذه المحادثة.")
-
-@client.on(events.NewMessage())
-async def handle_installation(event):
-    global phone_number_pending, phone_code_hash_pending, new_client, installation_active, awaiting_password
-
-    if not installation_active:
+@client.on(events.NewMessage(outgoing=True, pattern=r"\.تحقق (.+)$"))
+async def add_password(event):
+    global phone_number_pending, new_client
+    if phone_number_pending is None:
+        await event.respond('▪︎|الرجاء إرسال رقم الهاتف أولاً باستخدام الأمر `.جلسة <رقم الهاتف>`', parse_mode="markdown")
         return
 
-    # استقبال رقم الهاتف
-    if phone_number_pending is None and event.text.startswith("+"):
-        phone_number_pending = event.text.strip()
-        new_client = TelegramClient(StringSession(), api_id, api_hash)
-        await new_client.connect()
-
-        if not await new_client.is_user_authorized():
-            sent_code = await new_client.send_code_request(phone_number_pending)
-            phone_code_hash_pending = sent_code.phone_code_hash
-            await event.respond(f"✅| تم إرسال رمز التحقق إلى `{phone_number_pending}`.\nرجاءً أعد إرساله هنا مع وضع مسافات بين كل رقم، مثل: `1 2 3 4 5`.")
-        return
-
-    # استقبال رمز التحقق
-    if phone_number_pending and phone_code_hash_pending and event.text.replace(" ", "").isdigit():
-        code = event.text.replace(" ", "")
-        try:
-            await new_client.sign_in(phone_number_pending, code, phone_code_hash=phone_code_hash_pending)
-            save_session(new_client, phone_number_pending)
-            await event.respond(f"🎉| تم تسجيل الدخول بنجاح لرقم الهاتف `{phone_number_pending}` ✅")
-            reset_installation()
-        except SessionPasswordNeededError:
-            awaiting_password = True
-            await event.respond("🔑| حسابك يتطلب التحقق بخطوتين.\nرجاءً أرسل كلمة المرور الخاصة بك داخل قوسين، مثل:\n`(fgiigigfifgifgigf)`")
-        except Exception as e:
-            await event.respond(f"⚠️| حدث خطأ أثناء تسجيل الدخول: {str(e)}\n\n❌| تم إلغاء العملية.")
-            reset_installation()
-        return
-
-    # استقبال كلمة المرور
-    if awaiting_password and phone_number_pending and new_client:
-        match = re.search(r"[(](.*?)[)]", event.text.strip())
-        if match:
-            password = match.group(1).strip()
-            try:
-                await new_client.sign_in(phone_number_pending, password=password)
-                save_session(new_client, phone_number_pending)
-                await event.respond(f"🎉| تم تسجيل الدخول بنجاح لرقم الهاتف `{phone_number_pending}` ✅")
-                reset_installation()
-            except Exception as e:
-                await event.respond(f"⚠️| حدث خطأ أثناء تسجيل الدخول: {str(e)}\n\n❌| تم إلغاء العملية.")
-                reset_installation()
-        else:
-            await event.respond("⚠️| الرجاء إرسال كلمة المرور بين قوسين بهذه الطريقة: `(كلمة المرور هنا)`")
-        return
-
-def reset_installation():
-    """إعادة تعيين حالة التنصيب عند الانتهاء أو عند حدوث خطأ."""
-    global phone_number_pending, phone_code_hash_pending, new_client, installation_active, awaiting_password
-    phone_number_pending = None
-    phone_code_hash_pending = None
-    new_client = None
-    installation_active = False
-    awaiting_password = False
+    password = event.pattern_match.group(1)
+    try:
+        await new_client.sign_in(phone_number_pending, password=password)  
+        save_session(new_client, phone_number_pending)
+        await event.respond(f'▪︎|تمت إضافة الجلسة لرقم الهاتف {phone_number_pending} بنجاح✅️', parse_mode="markdown")
+        phone_number_pending = None
+        new_client = None
+    except Exception as e:
+        await event.respond(f'▪︎|حدث خطأ أثناء إضافة الجلسة: {e}', parse_mode="markdown")
