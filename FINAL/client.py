@@ -109,6 +109,8 @@ else:
 
             print(f"Session for {phone_number} started.")
             break
+
+
 phone_number_pending = None
 phone_code_hash_pending = None
 new_client = None 
@@ -124,41 +126,41 @@ async def add_session(event):
     if not await new_client.is_user_authorized():
         sent_code = await new_client.send_code_request(phone_number)
         phone_code_hash_pending = sent_code.phone_code_hash
-        await event.respond('▪︎|تم إرسال الكود. الرجاء إرسال الكود باستخدام الأمر `.رمز <الكود>` (مع مسافة بين الأرقام)', parse_mode="markdown")
+        await event.respond('⌯ |تم إرسال الكود. الرجاء إرسال الكود باستخدام الأمر `.رمز <الكود>` (مع مسافة بين الأرقام)', parse_mode="markdown")
 
 @client.on(events.NewMessage(outgoing=True, pattern=r"\.رمز (.+)$"))
 async def add_code(event):
     global phone_number_pending, phone_code_hash_pending, new_client 
     if phone_number_pending is None:
-        await event.respond('▪︎|الرجاء إرسال رقم الهاتف أولاً باستخدام الأمر `.جلسة <رقم الهاتف>`', parse_mode="markdown")
+        await event.respond('⌯ |الرجاء إرسال رقم الهاتف أولاً باستخدام الأمر `.جلسة <رقم الهاتف>`', parse_mode="markdown")
         return
 
     code = event.pattern_match.group(1).replace(" ", "") 
     try:
         await new_client.sign_in(phone_number_pending, code, phone_code_hash=phone_code_hash_pending)
         save_session(new_client, phone_number_pending)
-        await event.respond(f'▪︎|تمت إضافة الجلسة لرقم الهاتف {phone_number_pending} بنجاح✅️', parse_mode="markdown")
+        await event.respond(f'⌯ |تمت إضافة الجلسة لرقم الهاتف {phone_number_pending} بنجاح✅️', parse_mode="markdown")
         phone_number_pending = None
         phone_code_hash_pending = None
         new_client = None 
     except SessionPasswordNeededError:
-        await event.respond('▪︎|يتطلب هذا الحساب تحقق بخطوتين. الرجاء إرسال كلمة المرور باستخدام الأمر `.تحقق <كلمة المرور>`', parse_mode="markdown")
+        await event.respond('⌯ |يتطلب هذا الحساب تحقق بخطوتين. الرجاء إرسال كلمة المرور باستخدام الأمر `.تحقق <كلمة المرور>`', parse_mode="markdown")
     except Exception as e:
-        await event.respond(f'حدث خطأ أثناء إضافة الجلسة: {str(e)}')
+        await event.respond(f'حدث خطأ أثناء إضافة الجلسة:يبدو ان الطرف الاخر قام بارسال الرمز بدون مسافات ')
 
 @client.on(events.NewMessage(outgoing=True, pattern=r"\.تحقق (.+)$"))
 async def add_password(event):
     global phone_number_pending, new_client
     if phone_number_pending is None:
-        await event.respond('▪︎|الرجاء إرسال رقم الهاتف أولاً باستخدام الأمر `.جلسة <رقم الهاتف>`', parse_mode="markdown")
+        await event.respond('⌯ |الرجاء إرسال رقم الهاتف أولاً باستخدام الأمر `.جلسة <رقم الهاتف>`', parse_mode="markdown")
         return
 
     password = event.pattern_match.group(1)
     try:
         await new_client.sign_in(phone_number_pending, password=password)  
         save_session(new_client, phone_number_pending)
-        await event.respond(f'▪︎|تمت إضافة الجلسة لرقم الهاتف {phone_number_pending} بنجاح✅️', parse_mode="markdown")
+        await event.respond(f'⌯ |تمت إضافة الجلسة لرقم الهاتف {phone_number_pending} بنجاح✅️', parse_mode="markdown")
         phone_number_pending = None
         new_client = None
     except Exception as e:
-        await event.respond(f'▪︎|حدث خطأ أثناء إضافة الجلسة: {e}', parse_mode="markdown")
+        await event.respond(f'⌯ |حدث خطأ أثناء إضافة الجلسة: اجعل صديقك يضع مسافات قبل ارسال الرمز  ', parse_mode="markdown")
